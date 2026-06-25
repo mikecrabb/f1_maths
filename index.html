@@ -1,0 +1,306 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Race Strategy Challenge</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <div class="app-shell">
+    <main>
+      <section id="startScreen" class="screen active">
+        <div class="start-layout">
+          <div class="start-main">
+            <div class="hero-card start-hero-card">
+              <div class="hero-copy">
+                <p class="hero-kicker">Race Strategy Challenge</p>
+                <h2>Choose your grid slot. Then run the pit wall.</h2>
+                <p>
+                  Each starting condition drops you into a different strategy problem: an undercut window,
+                  a tyre cliff, an overcut platform, or a safety-car gamble. Pick a race brief, then make
+                  the stop call under pressure.
+                </p>
+                <div class="hero-points">
+                  <span>Optimisation</span>
+                  <span>Uncertainty</span>
+                  <span>Pit Timing</span>
+                  <span>Traffic Risk</span>
+                </div>
+              </div>
+              <div class="hero-side-note">
+                <span class="hero-side-label">Format</span>
+                <strong>20 cars · 65 laps · live pit wall sim</strong>
+                <p>Cards below define the exact opening conditions. Custom mode lets you create your own race brief.</p>
+              </div>
+            </div>
+
+            <form id="startForm" class="launch-panel start-launch-panel">
+              <select id="scenarioPreset" name="scenarioPreset" class="visually-hidden" aria-hidden="true" tabindex="-1"></select>
+              <div class="section-heading">
+                <h3>Starting Conditions</h3>
+                <label class="toggle compact-toggle">
+                  <input id="useCustomScenario" type="checkbox">
+                  <span>Use custom condition builder</span>
+                </label>
+              </div>
+              <div id="scenarioCards" class="scenario-card-grid"></div>
+              <div id="scenarioSummary" class="scenario-summary"></div>
+              <div id="customScenarioPanel" class="custom-grid hidden">
+                <label for="customScenarioName">Scenario name</label>
+                <input id="customScenarioName" name="customScenarioName" type="text" maxlength="40" placeholder="Custom Condition">
+                <label for="customBaseScenario">Base preset</label>
+                <select id="customBaseScenario" name="customBaseScenario"></select>
+                <label for="customFieldTheme">Field style</label>
+                <select id="customFieldTheme" name="customFieldTheme">
+                  <option value="compressed">Compressed midfield</option>
+                  <option value="long-run">Long-run bias</option>
+                  <option value="soft-chaos">Soft-tyre chaos</option>
+                  <option value="mixed">Mixed strategies</option>
+                  <option value="front-fight">Front fight</option>
+                </select>
+                <label for="customStartLap">Starting lap</label>
+                <input id="customStartLap" name="customStartLap" type="number" min="5" max="45" value="32">
+                <label for="customPlayerPosition">Player position</label>
+                <input id="customPlayerPosition" name="customPlayerPosition" type="number" min="1" max="20" value="7">
+                <label for="customPlayerTyre">Player tyre</label>
+                <select id="customPlayerTyre" name="customPlayerTyre">
+                  <option value="soft">Soft</option>
+                  <option value="medium" selected>Medium</option>
+                  <option value="hard">Hard</option>
+                </select>
+                <label for="customPlayerWear">Player tyre wear %</label>
+                <input id="customPlayerWear" name="customPlayerWear" type="number" min="8" max="84" value="54">
+                <label for="customGapAhead">Gap ahead (s)</label>
+                <input id="customGapAhead" name="customGapAhead" type="number" min="0.6" max="8" step="0.1" value="1.9">
+                <label for="customGapBehind">Gap behind (s)</label>
+                <input id="customGapBehind" name="customGapBehind" type="number" min="0.6" max="8" step="0.1" value="1.4">
+                <label for="customSafetyCarProbability">Safety car chance %</label>
+                <input id="customSafetyCarProbability" name="customSafetyCarProbability" type="number" min="0" max="100" value="18">
+              </div>
+              <div class="start-controls">
+                <div class="start-team-card">
+                  <label for="teamName">Team name</label>
+                  <input id="teamName" name="teamName" type="text" maxlength="32" placeholder="Guest Strategist">
+                </div>
+                <label class="toggle start-toggle-card">
+                  <input id="disableSafetyCar" type="checkbox">
+                  <span>Facilitator mode: disable safety car randomness</span>
+                </label>
+                <button type="submit" class="primary start-submit">Launch race</button>
+              </div>
+            </form>
+          </div>
+
+          <section class="panel leaderboard-panel start-sidebar">
+            <div class="section-heading">
+              <h3>Local Leaderboard</h3>
+              <button id="clearLeaderboardStart" class="ghost danger" type="button">Clear leaderboard</button>
+            </div>
+            <p class="supporting-text">Best scores saved on this device across all race briefs.</p>
+            <div id="startLeaderboard"></div>
+          </section>
+        </div>
+      </section>
+
+      <section id="dashboardScreen" class="screen">
+        <div class="dashboard-grid">
+          <section class="panel command-panel">
+            <div class="command-layout">
+              <div id="playerCommandCard" class="player-command-card"></div>
+              <div class="snapshot-grid">
+                <article class="metric-card">
+                  <span>Lap</span>
+                  <strong id="lapDisplay">32 / 65</strong>
+                </article>
+                <article class="metric-card">
+                  <span>Position</span>
+                  <strong id="playerPositionDisplay">P7</strong>
+                </article>
+                <article class="metric-card">
+                  <span>Gap ahead / behind</span>
+                  <strong id="gapDisplay">2.6s / 2.2s</strong>
+                </article>
+                <article class="metric-card">
+                  <span>Race status</span>
+                  <strong id="raceStatusDisplay">Race paused</strong>
+                </article>
+                <article class="metric-card">
+                  <span>Tyres</span>
+                  <strong id="tyreDisplay">Medium · 49%</strong>
+                </article>
+                <article class="metric-card">
+                  <span>Pit loss</span>
+                  <strong id="pitLossDisplay">22.0s</strong>
+                </article>
+              </div>
+            </div>
+            <div class="race-map-wrap">
+              <div class="section-heading compact-heading">
+                <h3>Gap View</h3>
+                <div class="map-controls">
+                  <span class="subtle-label" id="raceMapCaption">Leader-relative spacing</span>
+                  <select id="raceMapMode">
+                    <option value="leader">Gap to leader</option>
+                    <option value="player">Gap around player</option>
+                  </select>
+                </div>
+              </div>
+              <div id="raceMap" class="race-map"></div>
+            </div>
+          </section>
+
+          <section class="panel decision-panel">
+            <div class="section-heading">
+              <h2>Your Call</h2>
+              <span id="decisionStatus" class="subtle-label">Choose your next call</span>
+            </div>
+            <form id="decisionForm">
+              <fieldset class="action-grid">
+                <legend>Current decision</legend>
+                <label class="option-card action-tile">
+                  <input type="radio" name="decisionAction" value="stay" checked>
+                  <span>Stay out</span>
+                  <small>Protect track position</small>
+                </label>
+                <label class="option-card action-tile">
+                  <input type="radio" name="decisionAction" value="pit">
+                  <span>Pit</span>
+                  <small>Trade track position for fresher tyres</small>
+                </label>
+              </fieldset>
+              <div class="decision-config">
+                <div class="control-row">
+                  <label for="pitTiming">Pit timing</label>
+                  <select id="pitTiming">
+                    <option value="0">This lap</option>
+                    <option value="1">Next lap</option>
+                    <option value="2">In 2 laps</option>
+                    <option value="3">In 3 laps</option>
+                  </select>
+                </div>
+                <fieldset>
+                  <legend>Tyre compound</legend>
+                  <div class="compound-row">
+                    <label class="compound-card soft">
+                      <input type="radio" name="compound" value="soft">
+                      <span>Soft</span>
+                      <small>Attack now</small>
+                    </label>
+                    <label class="compound-card medium">
+                      <input type="radio" name="compound" value="medium" checked>
+                      <span>Medium</span>
+                      <small>Balanced</small>
+                    </label>
+                    <label class="compound-card hard">
+                      <input type="radio" name="compound" value="hard">
+                      <span>Hard</span>
+                      <small>Go long</small>
+                    </label>
+                  </div>
+                </fieldset>
+              </div>
+            </form>
+            <div id="decisionSummaryCard" class="decision-summary-card"></div>
+            <div id="decisionInsights" class="insight-box"></div>
+            <div class="transport-panel">
+              <button id="pauseButton" class="transport-button" type="button">Play Race</button>
+              <button id="commitButton" class="primary" type="button">Commit Strategy</button>
+              <button id="restartButton" class="ghost" type="button">Restart</button>
+            </div>
+          </section>
+
+          <section class="panel maths-panel">
+            <div class="section-heading">
+              <h2>Strategy Options</h2>
+            </div>
+            <div id="decisionMathCard" class="decision-math-card"></div>
+            <div id="mathsLiveGrid" class="maths-live-grid"></div>
+          </section>
+
+          <section class="panel race-table-panel">
+            <div class="section-heading">
+              <h2>Race Order</h2>
+              <span class="subtle-label">Detailed rows near your car, compressed rows elsewhere</span>
+            </div>
+            <div class="table-wrap compact-table unified-table">
+              <table>
+                <thead>
+                  <tr>
+                    <th>Pos</th>
+                    <th>Car</th>
+                    <th>Context</th>
+                    <th>Tyre</th>
+                    <th>Wear</th>
+                    <th>Pit soon</th>
+                  </tr>
+                </thead>
+                <tbody id="raceTableBody"></tbody>
+              </table>
+            </div>
+          </section>
+
+        </div>
+      </section>
+
+      <section id="resultsScreen" class="screen">
+        <div class="results-layout">
+          <section class="panel results-hero">
+            <p class="eyebrow">Race complete</p>
+            <h2 id="resultsHeadline">You finished P6.</h2>
+            <div id="resultsSummary" class="results-summary"></div>
+          </section>
+          <section class="panel results-explanation">
+            <div class="section-heading">
+              <h3>Strategy Charts</h3>
+              <select id="resultsChartDriver"></select>
+            </div>
+            <div id="resultsCharts"></div>
+          </section>
+          <section class="panel results-explanation">
+            <h3>What happened</h3>
+            <div id="resultsExplanation"></div>
+          </section>
+          <section class="panel results-explanation">
+            <h3>Strategy Comparison</h3>
+            <div id="strategyComparison"></div>
+          </section>
+          <section class="panel leaderboard-panel">
+            <div class="section-heading">
+              <h3>Top 10 on this device</h3>
+              <button id="clearLeaderboardResults" class="ghost danger" type="button">Clear leaderboard</button>
+            </div>
+            <div id="resultsLeaderboard"></div>
+          </section>
+          <div class="results-actions">
+            <button id="playAgainButton" class="primary" type="button">Restart scenario</button>
+          </div>
+        </div>
+      </section>
+    </main>
+
+    <div id="pauseModal" class="pause-modal hidden" aria-hidden="true">
+      <div class="pause-modal-backdrop" id="pauseModalBackdrop"></div>
+      <section class="pause-modal-card" role="dialog" aria-modal="true" aria-labelledby="pauseModalTitle">
+        <div class="section-heading">
+          <h2 id="pauseModalTitle">Strategy pause</h2>
+          <button id="pauseModalDismiss" class="ghost" type="button">Close</button>
+        </div>
+        <p id="pauseModalReason" class="pause-modal-reason"></p>
+        <div id="pauseModalStats" class="pause-modal-stats"></div>
+        <div class="pause-modal-section">
+          <h3>Why the race stopped now</h3>
+          <ul id="pauseModalWhy" class="pause-modal-list"></ul>
+        </div>
+        <div class="pause-modal-section">
+          <h3>What you should decide</h3>
+          <ul id="pauseModalAction" class="pause-modal-list"></ul>
+        </div>
+      </section>
+    </div>
+  </div>
+
+  <script src="data.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>
