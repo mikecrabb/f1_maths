@@ -1,9 +1,26 @@
 (function () {
   const dataApi = window.RACE_DATA;
   const { tyreCompounds } = dataApi;
-  const SECTORS_PER_LAP = 12;
+  const SECTORS_PER_LAP = 30;
   const LAP_DURATION_MS = 3000;
   const SECTOR_DURATION_MS = LAP_DURATION_MS / SECTORS_PER_LAP;
+  const paceProfiles = {
+    push: {
+      label: "Push",
+      lapTimeDelta: -0.45,
+      wearMultiplier: 1.22
+    },
+    normal: {
+      label: "Normal",
+      lapTimeDelta: 0,
+      wearMultiplier: 1
+    },
+    conserve: {
+      label: "Conserve",
+      lapTimeDelta: 0.38,
+      wearMultiplier: 0.82
+    }
+  };
   let raceConfig = {};
   let cars = [];
   let opponentStrategies = {};
@@ -22,7 +39,8 @@
     decision: {
       action: "stay",
       compound: "medium",
-      timingOffset: 0
+      timingOffset: 0,
+      paceMode: "normal"
     },
     pendingPlayerPit: null,
     playerStopCount: 0,
@@ -64,8 +82,8 @@
       "scenarioPreset", "scenarioCards", "scenarioSummary", "useCustomScenario", "customScenarioPanel", "customScenarioName", "customBaseScenario", "customFieldTheme",
       "customStartLap", "customPlayerPosition", "customPlayerTyre", "customPlayerWear", "customGapAhead", "customGapBehind", "customSafetyCarProbability",
       "lapDisplay", "playerPositionDisplay", "gapDisplay", "tyreDisplay", "pitLossDisplay",
-      "raceTableBody", "eventFeed", "decisionInsights", "decisionStatus", "safetyCarDisplay", "raceStatusDisplay", "raceMap", "raceMapMode", "raceMapCaption",
-      "playerCommandCard", "mathsLiveGrid", "decisionSummaryCard", "decisionMathCard",
+      "raceStatusCard", "raceTableBody", "eventFeed", "decisionInsights", "decisionStatus", "safetyCarDisplay", "raceStatusDisplay", "raceMap", "raceMapMode", "raceMapCaption",
+      "playerCommandCard", "mathsLiveGrid", "decisionSummaryCard", "decisionMathCard", "pitConfigBlock",
       "commitButton", "pauseButton", "restartButton", "playAgainButton", "resultsCharts", "resultsChartDriver",
       "resultsHeadline", "resultsSummary", "resultsExplanation", "strategyComparison",
       "pauseModal", "pauseModalBackdrop", "pauseModalDismiss", "pauseModalTitle", "pauseModalReason", "pauseModalStats", "pauseModalWhy", "pauseModalAction"
@@ -92,6 +110,9 @@
     });
 
     document.getElementById("decisionForm").addEventListener("change", syncDecisionFromForm);
+    document.querySelectorAll('input[name="paceMode"]').forEach((element) => {
+      element.addEventListener("change", handlePaceModeChange);
+    });
     dom.commitButton.addEventListener("click", commitStrategy);
     dom.pauseButton.addEventListener("click", togglePause);
     dom.restartButton.addEventListener("click", restartScenario);
@@ -219,19 +240,30 @@
 
   function renderScenarioCards() {
     const customEnabled = dom.useCustomScenario.checked;
-    dom.scenarioCards.innerHTML = dataApi.scenarioPresets.map((scenario) => {
+    const difficultyMeta = {
+      easy: "Easy",
+      medium: "Medium",
+      hard: "Hard",
+      extreme: "Extreme"
+    };
+    const difficultyOrder = { easy: 0, medium: 1, hard: 2, extreme: 3 };
+    const orderedScenarios = dataApi.scenarioPresets
+      .slice()
+      .sort((left, right) => difficultyOrder[left.difficulty] - difficultyOrder[right.difficulty]);
+
+    dom.scenarioCards.innerHTML = orderedScenarios.map((scenario) => {
       const isSelected = dom.scenarioPreset.value === scenario.id;
       const safetyCarLabel = scenario.safetyCarProbability >= 1
         ? `SC in ${scenario.safetyCarEarliestOffset}-${scenario.safetyCarLatestOffset} laps`
         : `${Math.round(scenario.safetyCarProbability * 100)}% safety car`;
       return `
         <button
-          class="scenario-card ${isSelected ? "active" : ""} ${customEnabled ? "muted" : ""}"
+          class="scenario-card scenario-${scenario.difficulty} ${isSelected ? "active" : ""} ${customEnabled ? "muted" : ""}"
           type="button"
           data-scenario-id="${scenario.id}"
           aria-pressed="${isSelected ? "true" : "false"}"
         >
-          <span class="scenario-card-eyebrow">Lap ${scenario.startLap} start</span>
+          <span class="scenario-card-eyebrow">${difficultyMeta[scenario.difficulty]} · Lap ${scenario.startLap} start</span>
           <strong>${escapeHtml(scenario.name)}</strong>
           <p>${escapeHtml(scenario.description)}</p>
           <div class="scenario-card-meta">
@@ -266,7 +298,7 @@
     dom.scenarioSummary.innerHTML = `
       <strong>${escapeHtml(bundle.name)}</strong>
       <p>${escapeHtml(bundle.description)}</p>
-      <p>Start: Lap ${bundle.raceConfig.startLap} of ${bundle.raceConfig.totalLaps} · ${lapsToGo} laps to go · Player P${player.position}</p>
+      <p>Difficulty: ${escapeHtml((dataApi.scenarioPresets.find((scenario) => scenario.id === bundle.id)?.difficulty || "custom").replace(/^\w/, (char) => char.toUpperCase()))} · Start: Lap ${bundle.raceConfig.startLap} of ${bundle.raceConfig.totalLaps} · ${lapsToGo} laps to go · Player P${player.position}</p>
       <p>Tyres: ${tyreCompounds[player.tyre].label} at ${player.tyreWear.toFixed(0)}% wear · ${escapeHtml(safetyCarSummary)}</p>
       <p>${dom.useCustomScenario.checked ? "Custom condition builder is active." : "Select a race brief card above, then launch the sim."}</p>
     `;
@@ -308,6 +340,7 @@
       car.lapStartPosition = car.position;
       car.undercutGain = 0;
       car.paceDeltaLog = [];
+      car.paceMode = "normal";
       if (!car.isPlayer) {
         const plan = opponentStrategies[car.id];
         car.strategyPlan = plan ? { ...plan } : null;
@@ -336,6 +369,7 @@
     return {
       willOccur,
       triggerLap,
+      durationLaps: willOccur ? randomInteger(3, 5) : 0,
       active: false,
       remainingLaps: 0,
       occurred: false
@@ -346,8 +380,22 @@
     const action = document.querySelector('input[name="decisionAction"]:checked').value;
     const compound = document.querySelector('input[name="compound"]:checked').value;
     const timingOffset = Number(document.getElementById("pitTiming").value);
-    state.decision = { action, compound, timingOffset };
+    const paceMode = document.querySelector('input[name="paceMode"]:checked').value;
+    state.decision = { action, compound, timingOffset, paceMode };
     renderDecisionPanel();
+  }
+
+  function handlePaceModeChange() {
+    syncDecisionFromForm();
+    if (!state.cars.length) {
+      return;
+    }
+    const player = getPlayerCar();
+    player.paceMode = state.decision.paceMode;
+    if (state.pendingPlayerPit) {
+      state.pendingPlayerPit.paceMode = state.decision.paceMode;
+    }
+    renderDashboard();
   }
 
   function renderDecisionPanel() {
@@ -356,58 +404,93 @@
     }
     const player = getPlayerCar();
     const pitLap = getScheduledPitLap(state.decision.timingOffset);
-    const projection = calculateProjectedPitExit(player, state.decision.compound, pitLap);
-    const decisionMath = calculateDecisionMath(player, projection, pitLap, state.decision.compound);
+    const projection = calculateProjectedPitExit(player, state.decision.compound, pitLap, state.decision.paceMode);
+    const decisionMath = calculateDecisionMath(player, projection, pitLap, state.decision.compound, state.decision.paceMode);
+    const strategyContext = buildStrategyContext(player, projection, pitLap, state.decision.compound, state.decision.paceMode, decisionMath);
+    const recommendation = buildStrategyRecommendation(player, projection, decisionMath, strategyContext);
+    const paceProfile = paceProfiles[state.decision.paceMode];
     const trafficLabel = projection.trafficRisk ? "Likely to rejoin in traffic." : "Likely to rejoin in cleaner air.";
     const actionLabel = state.decision.action === "pit"
       ? `Pit planned for Lap ${pitLap} on ${tyreCompounds[state.decision.compound].label} tyres.`
       : "Stay out selected for now.";
+    const pitWindowLabel = state.decision.action === "pit"
+      ? `Rejoin near P${projection.projectedPosition} · ${trafficLabel}`
+      : "Rejoin projection only matters once a stop is armed.";
+    const tyreWindowLabel = state.decision.action === "pit"
+      ? `${tyreCompounds[state.decision.compound].label} target stint: ${tyreCompounds[state.decision.compound].effectiveLife}.`
+      : `${tyreCompounds[player.tyre].label} tyres still on car · wear at ${player.tyreWear.toFixed(0)}%.`;
     const cliffRisk = player.tyreWear >= tyreCompounds[player.tyre].cliffThreshold ? "Tyre cliff active now." :
       player.tyreWear >= tyreCompounds[player.tyre].cliffThreshold - 8 ? "Tyre cliff is approaching." :
       "Tyres are still in the usable window.";
 
     dom.decisionInsights.innerHTML = `
-      <p><strong>${actionLabel}</strong></p>
-      <p>If you pit, the model expects a rejoin near <strong>P${projection.projectedPosition}</strong>. ${trafficLabel}</p>
-      <p>${tyreCompounds[state.decision.compound].label} tyres usually last <strong>${tyreCompounds[state.decision.compound].effectiveLife}</strong>.</p>
-      <p>${cliffRisk}</p>
+      <div class="decision-insight-grid">
+        <div class="decision-insight-item">
+          <span>Current call</span>
+          <strong>${actionLabel}</strong>
+        </div>
+        <div class="decision-insight-item">
+          <span>Pace mode</span>
+          <strong>${paceProfile.label}</strong>
+          <small>${paceProfile.lapTimeDelta > 0 ? "+" : ""}${paceProfile.lapTimeDelta.toFixed(2)}s/lap · ${(paceProfile.wearMultiplier * 100).toFixed(0)}% wear rate</small>
+        </div>
+        <div class="decision-insight-item">
+          <span>Pit window</span>
+          <strong>${pitWindowLabel}</strong>
+        </div>
+        <div class="decision-insight-item">
+          <span>Tyre window</span>
+          <strong>${tyreWindowLabel}</strong>
+          <small>${cliffRisk}</small>
+        </div>
+      </div>
     `;
     dom.decisionSummaryCard.innerHTML = `
-      <span class="summary-label">Current strategy</span>
-      <span class="summary-main">${state.decision.action === "pit" ? `Pit Lap ${pitLap}` : "Stay out"}</span>
+      <span class="summary-label">${state.decision.action === "pit" ? "Pit call" : "Stay out call"}</span>
+      <span class="summary-main">${state.decision.action === "pit" ? `Lap ${pitLap} · ${tyreCompounds[state.decision.compound].label}` : paceProfile.label}</span>
       <span class="summary-detail">
         ${state.decision.action === "pit"
-          ? `${tyreCompounds[state.decision.compound].label} tyres, projected rejoin P${projection.projectedPosition}.`
-          : `Hold P${player.position} for now and watch tyre wear and undercut risk.`}
+          ? `${tyreCompounds[state.decision.compound].label} tyres, ${paceProfile.label.toLowerCase()} pace, projected rejoin P${projection.projectedPosition}.`
+          : `Hold P${player.position} for now on ${paceProfile.label.toLowerCase()} pace and watch tyre wear and undercut risk.`}
       </span>
     `;
     dom.decisionMathCard.innerHTML = `
-      <span class="summary-label">The maths decision</span>
-      <span class="summary-main">Does tyre time gained beat pit time lost?</span>
-      <div class="decision-math-grid">
-        <div><strong>${decisionMath.lapGain.toFixed(2)}s/lap</strong><small>fresh tyre gain</small></div>
-        <div><strong>${decisionMath.breakEvenLaps.toFixed(1)} laps</strong><small>needed to pay back stop</small></div>
-        <div><strong>${decisionMath.netEstimate > 0 ? "+" : ""}${decisionMath.netEstimate.toFixed(1)}s</strong><small>rough net effect</small></div>
-        <div><strong>${decisionMath.lapsToCliff}</strong><small>laps until tyre cliff</small></div>
+      <div class="decision-call-strip ${recommendation.toneClass}">
+        <div>
+          <span class="summary-label">Best call now</span>
+          <span class="summary-main">${recommendation.headline}</span>
+          <p class="decision-math-text">${recommendation.summary}</p>
+        </div>
+        <div class="decision-call-meta">
+          <strong>${recommendation.confidence}</strong>
+          <small>confidence</small>
+        </div>
       </div>
-      <p class="decision-math-text">
-        Compare <strong>${decisionMath.lapGain.toFixed(2)} × ${decisionMath.usefulLaps}</strong> seconds of likely tyre gain
-        against <strong>${decisionMath.totalStopCost.toFixed(1)}s</strong> of pit loss and traffic. If the gain is bigger, the stop is more likely to pay off.
-      </p>
+      <div class="decision-math-grid compact">
+        <div><strong>${decisionMath.lapGain.toFixed(2)}s/lap</strong><small>fresh tyre gain</small></div>
+        <div><strong>${decisionMath.breakEvenLaps.toFixed(1)} laps</strong><small>to recover pit loss</small></div>
+        <div><strong>${strategyContext.undercutThreatLabel}</strong><small>stay-out threat</small></div>
+        <div><strong>${strategyContext.coverRiskLabel}</strong><small>pit-now cover risk</small></div>
+      </div>
     `;
+    dom.pitConfigBlock.classList.toggle("hidden", state.decision.action !== "pit");
+    dom.commitButton.textContent = state.decision.action === "pit"
+      ? (!state.raceStarted ? "Confirm Pit And Start" : "Confirm Pit And Resume")
+      : (!state.raceStarted ? "Confirm Stay Out And Start" : "Confirm Stay Out And Resume");
     dom.decisionStatus.textContent = state.pendingPlayerPit
-      ? `Scheduled stop: Lap ${state.pendingPlayerPit.lap} for ${tyreCompounds[state.pendingPlayerPit.compound].label}`
+      ? `Scheduled stop: Lap ${state.pendingPlayerPit.lap} for ${tyreCompounds[state.pendingPlayerPit.compound].label} · ${paceProfiles[state.pendingPlayerPit.paceMode || "normal"].label}`
       : state.automaticPauseReason || "Choose your next call";
   }
 
   function renderDashboard() {
     const player = getPlayerCar();
-    const projection = calculateProjectedPitExit(player, state.decision.compound, getScheduledPitLap(state.decision.timingOffset));
+    const projection = calculateProjectedPitExit(player, state.decision.compound, getScheduledPitLap(state.decision.timingOffset), state.decision.paceMode);
     const gapBehind = getGapBehind(player);
     dom.lapDisplay.textContent = `${state.currentSector > 0 ? state.currentLap + 1 : state.currentLap} / ${raceConfig.totalLaps}`;
     dom.playerPositionDisplay.textContent = `P${player.position}`;
     dom.gapDisplay.textContent = `${formatSeconds(player.gapToCarAhead)} / ${formatSeconds(gapBehind)}`;
     dom.raceStatusDisplay.textContent = getRaceStatusLabel();
+    dom.raceStatusCard.classList.toggle("safety-car-status", state.safetyCar.active);
     dom.tyreDisplay.textContent = `${tyreCompounds[player.tyre].label} · ${player.tyreWear.toFixed(0)}%`;
     dom.pitLossDisplay.textContent = `${currentPitLoss().toFixed(1)}s`;
     dom.raceMapCaption.textContent = state.raceMapMode === "leader" ? "Leader-relative spacing" : "Gap around your car";
@@ -423,22 +506,22 @@
   function setControlStates() {
     const disabled = !state.racePaused || state.raceFinished;
     document.querySelectorAll("#decisionForm input, #decisionForm select").forEach((element) => {
+      if (element.name === "paceMode") {
+        element.disabled = state.raceFinished;
+        return;
+      }
       element.disabled = disabled;
     });
-    dom.commitButton.disabled = state.raceFinished;
-    dom.pauseButton.disabled = state.raceFinished;
-    dom.pauseButton.textContent = !state.raceStarted
-      ? "Play Race"
-      : state.racePaused
-        ? "Resume Race"
-        : "Pause Race";
+    dom.commitButton.disabled = !state.racePaused || state.raceFinished;
+    dom.pauseButton.disabled = state.raceFinished || !state.raceStarted;
+    dom.pauseButton.textContent = state.racePaused ? "Resume Race" : "Pause Race";
   }
 
   function renderRaceTable(player = getPlayerCar()) {
     dom.raceTableBody.innerHTML = state.cars.map((car) => {
       const isLocalBattle = Math.abs(car.position - player.position) <= 3;
-      const contextLabel = buildRaceTableContext(car, player, isLocalBattle);
       const deltaBadge = renderPositionDeltaBadge(car);
+      const paceLabel = paceProfiles[car.paceMode || "normal"].label;
       return `
       <tr class="${car.isPlayer ? "player-row" : ""} ${isLocalBattle ? "local-row" : "minimal-row"}">
         <td>P${car.position}${deltaBadge}</td>
@@ -447,8 +530,12 @@
           <small>${escapeHtml(car.driver)}</small>
           ${isLocalBattle ? `<small class="team-line">${escapeHtml(car.team)}</small>` : ""}
         </td>
-        <td>${contextLabel}</td>
-        <td><span class="tyre-tag tyre-${car.tyre}">${tyreCompounds[car.tyre].label}</span></td>
+        <td>${renderGapAheadCell(car)}</td>
+        <td>${renderGapLeaderCell(car)}</td>
+        <td>
+          <span class="tyre-tag tyre-${car.tyre}">${tyreCompounds[car.tyre].label}</span>
+          ${car.isPlayer || isLocalBattle ? `<small class="team-line">Pace ${escapeHtml(paceLabel)}</small>` : ""}
+        </td>
         <td>${car.tyreWear.toFixed(0)}%</td>
         <td>${car.pitSoonConfidence}</td>
       </tr>`;
@@ -471,20 +558,22 @@
     if (state.decision.action === "pit") {
       state.pendingPlayerPit = {
         lap: getScheduledPitLap(state.decision.timingOffset),
-        compound: state.decision.compound
+        compound: state.decision.compound,
+        paceMode: state.decision.paceMode
       };
       state.automaticPauseReason = `Pit scheduled for Lap ${state.pendingPlayerPit.lap}.`;
       state.pauseContext = null;
       pushEvent(
-        `Strategy locked: ${state.teamName} plans to pit on Lap ${state.pendingPlayerPit.lap} for ${tyreCompounds[state.pendingPlayerPit.compound].label} tyres from P${player.position}.`
+        `Strategy locked: ${state.teamName} plans to pit on Lap ${state.pendingPlayerPit.lap} for ${tyreCompounds[state.pendingPlayerPit.compound].label} tyres on ${paceProfiles[state.pendingPlayerPit.paceMode].label.toLowerCase()} pace from P${player.position}.`
       );
     } else {
       state.pendingPlayerPit = null;
       state.automaticPauseReason = "Staying out for now.";
       state.pauseContext = null;
-      pushEvent(`Strategy locked: ${state.teamName} stays out at the restart.`);
+      pushEvent(`Strategy locked: ${state.teamName} stays out on ${paceProfiles[state.decision.paceMode].label.toLowerCase()} pace at the restart.`);
     }
 
+    player.paceMode = state.decision.paceMode;
     state.racePaused = false;
     state.raceStarted = true;
     renderDashboard();
@@ -548,6 +637,7 @@
       }
       applyOpponentPitDecisions(lap);
       applyPlayerPitDecision(lap);
+      applyOpponentPaceModes(lap);
       state.cars.forEach((car) => {
         car.pendingLapTime = calculateLapTime(car);
       });
@@ -560,6 +650,10 @@
       car.totalRaceTime += sectorTime;
     });
     updateRaceOrder();
+    if (state.safetyCar.active) {
+      applySafetyCarCompressionToField(state.cars);
+      updateRaceOrder();
+    }
 
     if (state.currentSector === SECTORS_PER_LAP) {
       state.cars.forEach((car) => {
@@ -604,8 +698,8 @@
     ) {
       state.safetyCar.active = true;
       state.safetyCar.occurred = true;
-      state.safetyCar.remainingLaps = raceConfig.safetyCarDurationLaps;
-      pushEvent(`Lap ${lap}: Safety car deployed. Pit loss is reduced and the race is neutralised.`);
+      state.safetyCar.remainingLaps = state.safetyCar.durationLaps;
+      pushEvent(`Lap ${lap}: Safety car deployed for ${state.safetyCar.durationLaps} laps. The field is neutralised and will bunch up behind it.`);
       pauseRace(buildPauseContext("safety-car"));
     }
   }
@@ -645,10 +739,86 @@
     });
   }
 
+  function applyOpponentPaceModes(lap) {
+    state.cars.forEach((car) => {
+      if (car.isPlayer) {
+        return;
+      }
+      car.paceMode = chooseAIPaceMode(car, lap, state.safetyCar.active);
+    });
+  }
+
+  function applySafetyCarCompressionToField(fieldCars) {
+    fieldCars.sort((a, b) => a.totalRaceTime - b.totalRaceTime);
+    let previousTime = fieldCars[0].totalRaceTime;
+    for (let index = 1; index < fieldCars.length; index += 1) {
+      const car = fieldCars[index];
+      const minGap = 0.18;
+      const targetGap = 0.42 + Math.min(0.18, index * 0.01);
+      const targetTime = previousTime + targetGap;
+      if (car.totalRaceTime > targetTime) {
+        car.totalRaceTime = targetTime + ((car.totalRaceTime - targetTime) * 0.28);
+      }
+      car.totalRaceTime = Math.max(car.totalRaceTime, previousTime + minGap);
+      previousTime = car.totalRaceTime;
+    }
+  }
+
+  function chooseAIPaceMode(car, lap, safetyCarActive) {
+    if (safetyCarActive) {
+      return "conserve";
+    }
+    const tyre = tyreCompounds[car.tyre];
+    const lapsToCliff = estimateLapsToCliff(car);
+    const lapsToNextStop = estimateAIPitWindow(car, lap);
+    if (car.outLapRemaining > 0) {
+      return lapsToCliff <= 4 ? "normal" : "push";
+    }
+    if (car.tyreWear >= tyre.cliffThreshold - 2 || lapsToCliff <= 1) {
+      return "conserve";
+    }
+    if (lapsToNextStop !== null && lapsToNextStop <= 1 && car.tyreWear < tyre.cliffThreshold - 6) {
+      return "push";
+    }
+    if (car.gapToCarAhead !== null && car.gapToCarAhead < 1.2 && car.tyreWear < tyre.cliffThreshold - 10) {
+      return "push";
+    }
+    if (car.gapToCarAhead !== null && car.gapToCarAhead > 3.6 && car.tyreWear > tyre.cliffThreshold - 8) {
+      return "conserve";
+    }
+    return "normal";
+  }
+
+  function estimateLapsToCliff(car) {
+    const tyre = tyreCompounds[car.tyre];
+    const paceProfile = paceProfiles[car.paceMode || "normal"];
+    const wearRate = tyre.wearPerLap * paceProfile.wearMultiplier;
+    const wearToCliff = tyre.cliffThreshold - car.tyreWear;
+    if (wearToCliff <= 0) {
+      return 0;
+    }
+    return Math.max(1, Math.floor(wearToCliff / Math.max(0.1, wearRate)));
+  }
+
+  function estimateAIPitWindow(car, lap) {
+    const plan = car.strategyPlan;
+    if (!plan) {
+      return null;
+    }
+    if (car.completedStops.length === 0) {
+      return Math.max(0, plan.firstPitLap - lap);
+    }
+    if (car.completedStops.length === 1 && plan.secondPitLap) {
+      return Math.max(0, plan.secondPitLap - lap);
+    }
+    return null;
+  }
+
   function applyPlayerPitDecision(lap) {
     if (!state.pendingPlayerPit || state.pendingPlayerPit.lap !== lap) {
       return;
     }
+    getPlayerCar().paceMode = state.pendingPlayerPit.paceMode || state.decision.paceMode;
     applyPitStop(getPlayerCar(), state.pendingPlayerPit.compound, lap, true);
     state.pendingPlayerPit = null;
   }
@@ -660,8 +830,9 @@
 
   function updateTyreWear(car) {
     const tyre = tyreCompounds[car.tyre];
+    const paceProfile = paceProfiles[car.paceMode || "normal"];
     car.tyreAge += 1;
-    car.tyreWear = Math.min(100, car.tyreWear + tyre.wearPerLap);
+    car.tyreWear = Math.min(100, car.tyreWear + (tyre.wearPerLap * paceProfile.wearMultiplier));
   }
 
   function applyPitStop(car, newCompound, lap, isPlayer) {
@@ -707,13 +878,14 @@
     });
   }
 
-  function calculateProjectedPitExit(playerCar, targetCompound, pitLap) {
+  function calculateProjectedPitExit(playerCar, targetCompound, pitLap, playerPaceMode = null) {
     const currentTime = playerCar.totalRaceTime;
     const pitLoss = currentPitLoss();
     const lapsUntilProjection = Math.max(1, pitLap - state.currentLap);
     const lapsBeforePit = Math.max(0, lapsUntilProjection - 1);
-    const currentStintLap = estimateLapTimeForProjection(playerCar, playerCar.tyre, playerCar.tyreWear, false);
-    const projectedOutLap = estimateLapTimeForProjection(playerCar, targetCompound, 3, true);
+    const projectionCar = { ...playerCar, paceMode: playerPaceMode || playerCar.paceMode };
+    const currentStintLap = estimateLapTimeForProjection(projectionCar, playerCar.tyre, playerCar.tyreWear, false);
+    const projectedOutLap = estimateLapTimeForProjection(projectionCar, targetCompound, 3, true);
     const projectedTime = currentTime + (lapsBeforePit * currentStintLap) + pitLoss + projectedOutLap;
     const ordered = [...state.cars]
       .map((car) => ({
@@ -763,9 +935,6 @@
 
   function checkAutomaticPause() {
     const player = getPlayerCar();
-    if (state.safetyCar.active) {
-      return buildPauseContext("safety-car");
-    }
     if (player.tyreWear >= 85) {
       return buildPauseContext("tyre-cliff");
     }
@@ -863,7 +1032,7 @@
       : "You chose not to pit, which left you exposed to the tyre cliff.";
 
     const safetySummary = state.safetyCar.occurred
-      ? `A safety car appeared on Lap ${state.safetyCar.triggerLap}, reducing pit loss to ${raceConfig.safetyCarPitLoss.toFixed(0)} seconds for two laps.`
+      ? `A safety car appeared on Lap ${state.safetyCar.triggerLap}, reducing pit loss to ${raceConfig.safetyCarPitLoss.toFixed(0)} seconds for ${state.safetyCar.durationLaps} laps while the field bunched behind it.`
       : "This run stayed green, so every stop cost the full normal pit-loss value.";
     const optimalSummary = optimalAnalysis.actualStopLap === null
       ? `The strongest one-stop window in this run was Lap ${optimalAnalysis.bestLap} on ${tyreCompounds[optimalAnalysis.bestCompound].label}, so skipping the stop cost time.`
@@ -918,6 +1087,7 @@
       car.strategyPlan = car.isPlayer ? null : (opponentStrategies[car.id] ? { ...opponentStrategies[car.id] } : null);
       car.trafficLapsRemaining = 0;
       car.outLapRemaining = 0;
+      car.paceMode = "normal";
     });
 
     while (currentLap < raceConfig.totalLaps) {
@@ -925,11 +1095,12 @@
       if (safetyPlan.willOccur && !safetyPlan.occurred && lap === safetyPlan.triggerLap) {
         safetyPlan.active = true;
         safetyPlan.occurred = true;
-        safetyPlan.remainingLaps = raceConfig.safetyCarDurationLaps;
+        safetyPlan.remainingLaps = safetyPlan.durationLaps;
       }
 
       simCars.forEach((car) => {
         if (car.isPlayer) {
+          car.paceMode = "normal";
           if (
             car.completedStops.length === 0 &&
             (lap === baselinePlan.firstPitLap || (safetyPlan.active && lap >= baselinePlan.firstPitLap && car.tyreWear > 60))
@@ -968,23 +1139,34 @@
         }
       });
 
+      simCars.forEach((car) => {
+        if (!car.isPlayer) {
+          car.paceMode = chooseAIPaceMode(car, lap, safetyPlan.active);
+        }
+      });
+
       simCars.sort((a, b) => a.totalRaceTime - b.totalRaceTime);
       simCars.forEach((car, index) => {
         const gapAhead = index === 0 ? null : car.totalRaceTime - simCars[index - 1].totalRaceTime;
         const tyre = tyreCompounds[car.tyre];
+        const paceProfile = paceProfiles[car.paceMode || "normal"];
         const wearPenalty = Math.pow(car.tyreWear / 100, 2) * tyre.wearMultiplier;
         const cliffPenalty = car.tyreWear > tyre.cliffThreshold ? (car.tyreWear - tyre.cliffThreshold) * 0.15 : 0;
         const dirtyAirPenalty = gapAhead !== null && gapAhead < raceConfig.dirtyAirGap ? raceConfig.dirtyAirPenalty : 0;
         const trafficPenalty = car.outLapRemaining > 0 && gapAhead !== null && gapAhead < raceConfig.trafficGap ? raceConfig.trafficPenalty : 0;
         const outLapPenalty = car.outLapRemaining > 0 ? 0.7 : 0;
         const safetyPenalty = safetyPlan.active ? 10.5 : 0;
-        car.totalRaceTime += raceConfig.baseLapTime + tyre.compoundOffset + wearPenalty + cliffPenalty + dirtyAirPenalty + trafficPenalty + outLapPenalty + safetyPenalty;
+        car.totalRaceTime += raceConfig.baseLapTime + tyre.compoundOffset + paceProfile.lapTimeDelta + wearPenalty + cliffPenalty + dirtyAirPenalty + trafficPenalty + outLapPenalty + safetyPenalty;
         car.tyreAge += 1;
-        car.tyreWear = Math.min(100, car.tyreWear + tyre.wearPerLap);
+        car.tyreWear = Math.min(100, car.tyreWear + (tyre.wearPerLap * paceProfile.wearMultiplier));
         if (car.outLapRemaining > 0) {
           car.outLapRemaining -= 1;
         }
       });
+
+      if (safetyPlan.active) {
+        applySafetyCarCompressionToField(simCars);
+      }
 
       if (safetyPlan.active) {
         safetyPlan.remainingLaps -= 1;
@@ -1027,6 +1209,7 @@
       car.strategyPlan = car.isPlayer ? null : (opponentStrategies[car.id] ? { ...opponentStrategies[car.id] } : null);
       car.trafficLapsRemaining = 0;
       car.outLapRemaining = 0;
+      car.paceMode = "normal";
     });
 
     while (currentLap < raceConfig.totalLaps) {
@@ -1034,11 +1217,12 @@
       if (safetyPlan.willOccur && !safetyPlan.occurred && lap === safetyPlan.triggerLap) {
         safetyPlan.active = true;
         safetyPlan.occurred = true;
-        safetyPlan.remainingLaps = raceConfig.safetyCarDurationLaps;
+        safetyPlan.remainingLaps = safetyPlan.durationLaps;
       }
 
       simCars.forEach((car) => {
         if (car.isPlayer) {
+          car.paceMode = "normal";
           if (plan && car.completedStops.length === 0 && lap === plan.firstPitLap) {
             const loss = safetyPlan.active ? raceConfig.safetyCarPitLoss : raceConfig.normalPitLoss;
             car.totalRaceTime += loss;
@@ -1076,23 +1260,34 @@
         }
       });
 
+      simCars.forEach((car) => {
+        if (!car.isPlayer) {
+          car.paceMode = chooseAIPaceMode(car, lap, safetyPlan.active);
+        }
+      });
+
       simCars.sort((a, b) => a.totalRaceTime - b.totalRaceTime);
       simCars.forEach((car, index) => {
         const gapAhead = index === 0 ? null : car.totalRaceTime - simCars[index - 1].totalRaceTime;
         const tyre = tyreCompounds[car.tyre];
+        const paceProfile = paceProfiles[car.paceMode || "normal"];
         const wearPenalty = Math.pow(car.tyreWear / 100, 2) * tyre.wearMultiplier;
         const cliffPenalty = car.tyreWear > tyre.cliffThreshold ? (car.tyreWear - tyre.cliffThreshold) * 0.15 : 0;
         const dirtyAirPenalty = gapAhead !== null && gapAhead < raceConfig.dirtyAirGap ? raceConfig.dirtyAirPenalty : 0;
         const trafficPenalty = car.outLapRemaining > 0 && gapAhead !== null && gapAhead < raceConfig.trafficGap ? raceConfig.trafficPenalty : 0;
         const outLapPenalty = car.outLapRemaining > 0 ? 0.7 : 0;
         const safetyPenalty = safetyPlan.active ? 10.5 : 0;
-        car.totalRaceTime += raceConfig.baseLapTime + tyre.compoundOffset + wearPenalty + cliffPenalty + dirtyAirPenalty + trafficPenalty + outLapPenalty + safetyPenalty;
+        car.totalRaceTime += raceConfig.baseLapTime + tyre.compoundOffset + paceProfile.lapTimeDelta + wearPenalty + cliffPenalty + dirtyAirPenalty + trafficPenalty + outLapPenalty + safetyPenalty;
         car.tyreAge += 1;
-        car.tyreWear = Math.min(100, car.tyreWear + tyre.wearPerLap);
+        car.tyreWear = Math.min(100, car.tyreWear + (tyre.wearPerLap * paceProfile.wearMultiplier));
         if (car.outLapRemaining > 0) {
           car.outLapRemaining -= 1;
         }
       });
+
+      if (safetyPlan.active) {
+        applySafetyCarCompressionToField(simCars);
+      }
 
       if (safetyPlan.active) {
         safetyPlan.remainingLaps -= 1;
@@ -1297,15 +1492,17 @@
 
   function estimateLapTimeForProjection(car, tyreKey, wear, outLap) {
     const tyre = tyreCompounds[tyreKey];
+    const paceProfile = paceProfiles[car.paceMode || "normal"];
     const wearPenalty = Math.pow(wear / 100, 2) * tyre.wearMultiplier;
     const cliffPenalty = wear > tyre.cliffThreshold ? (wear - tyre.cliffThreshold) * 0.15 : 0;
     const outLapPenalty = outLap ? 0.7 : 0;
     const safetyPenalty = state.safetyCar.active ? 10.5 : 0;
-    return raceConfig.baseLapTime + tyre.compoundOffset + wearPenalty + cliffPenalty + outLapPenalty + safetyPenalty;
+    return raceConfig.baseLapTime + tyre.compoundOffset + paceProfile.lapTimeDelta + wearPenalty + cliffPenalty + outLapPenalty + safetyPenalty;
   }
 
-  function calculateLapBreakdown(car) {
+  function calculateLapBreakdown(car, paceModeOverride = null) {
     const tyre = tyreCompounds[car.tyre];
+    const paceProfile = paceProfiles[paceModeOverride || car.paceMode || "normal"];
     const wearPenalty = Math.pow(car.tyreWear / 100, 2) * tyre.wearMultiplier;
     const cliffPenalty = car.tyreWear > tyre.cliffThreshold ? (car.tyreWear - tyre.cliffThreshold) * 0.15 : 0;
     const dirtyAirPenalty = car.gapToCarAhead !== null && car.gapToCarAhead < raceConfig.dirtyAirGap ? raceConfig.dirtyAirPenalty : 0;
@@ -1315,6 +1512,7 @@
     return {
       base: raceConfig.baseLapTime,
       compoundOffset: tyre.compoundOffset,
+      paceDelta: paceProfile.lapTimeDelta,
       wearPenalty,
       cliffPenalty,
       dirtyAirPenalty,
@@ -1323,6 +1521,7 @@
       safetyPenalty,
       total: raceConfig.baseLapTime
         + tyre.compoundOffset
+        + paceProfile.lapTimeDelta
         + wearPenalty
         + cliffPenalty
         + dirtyAirPenalty
@@ -1333,41 +1532,24 @@
   }
 
   function renderLiveMaths(player, projection) {
-    const currentBreakdown = calculateLapBreakdown(player);
+    const currentBreakdown = calculateLapBreakdown(player, state.decision.paceMode);
     const chosenCompound = state.decision.compound;
-    const projectedBreakdown = calculateProjectionBreakdown(player, chosenCompound);
-    const cliffDelta = tyreCompounds[player.tyre].cliffThreshold - player.tyreWear;
+    const projectedBreakdown = calculateProjectionBreakdown(player, chosenCompound, state.decision.paceMode);
+    const pitLap = getScheduledPitLap(state.decision.timingOffset);
+    const decisionMath = calculateDecisionMath(player, projection, pitLap, chosenCompound, state.decision.paceMode);
+    const strategyContext = buildStrategyContext(player, projection, pitLap, chosenCompound, state.decision.paceMode, decisionMath);
 
     dom.mathsLiveGrid.innerHTML = [
-      mathsCard("Stay out now", `${currentBreakdown.total.toFixed(2)}s`, [
-        `Base lap: 90.00s`,
-        signedLine(currentBreakdown.wearPenalty, "wear penalty"),
-        signedLine(currentBreakdown.cliffPenalty, "cliff penalty"),
-        signedLine(currentBreakdown.dirtyAirPenalty, "dirty air"),
-        signedLine(currentBreakdown.trafficPenalty, "traffic")
-      ]),
-      mathsCard("Pit option", `Rejoin P${projection.projectedPosition}`, [
-        `Pit loss: ${currentPitLoss().toFixed(1)}s`,
-        `${tyreCompounds[chosenCompound].label} out-lap: ${projectedBreakdown.outLap.toFixed(2)}s`,
-        projection.trafficRisk ? "Likely traffic on exit" : "Clearer exit expected"
-      ]),
-      mathsCard("Tyre trend", `${player.tyreWear.toFixed(0)}% -> ${Math.min(100, player.tyreWear + tyreCompounds[player.tyre].wearPerLap).toFixed(1)}%`, [
-        `Wear rate: ${tyreCompounds[player.tyre].wearPerLap.toFixed(1)}% per lap`,
-        `Cliff starts at ${tyreCompounds[player.tyre].cliffThreshold}%`,
-        cliffDelta <= 0 ? "You are already past the cliff" : `${cliffDelta.toFixed(0)}% until the cliff`
-      ]),
-      mathsCard("Trade-off", projectedBreakdown.deltaText, [
-        `Fresh tyre gain: ${projectedBreakdown.freshGain.toFixed(2)}s/lap`,
-        player.gapToCarAhead !== null && player.gapToCarAhead < raceConfig.dirtyAirGap ? "Staying out means dirty air" : "Staying out keeps track position",
-        state.safetyCar.active ? "Safety car makes the stop cheaper" : "Green-flag stop costs full time"
-      ])
+      renderOptionComparisonCard(currentBreakdown, projectedBreakdown, projection, decisionMath, strategyContext),
+      renderRivalPressureCard(strategyContext, decisionMath)
     ].join("");
   }
 
-  function calculateProjectionBreakdown(player, targetCompound) {
-    const current = calculateLapBreakdown(player);
-    const outLap = estimateLapTimeForProjection(player, targetCompound, 3, true);
-    const freshLap = estimateLapTimeForProjection(player, targetCompound, 8, false);
+  function calculateProjectionBreakdown(player, targetCompound, paceMode = null) {
+    const projectionCar = { ...player, paceMode: paceMode || player.paceMode };
+    const current = calculateLapBreakdown(player, paceMode);
+    const outLap = estimateLapTimeForProjection(projectionCar, targetCompound, 3, true);
+    const freshLap = estimateLapTimeForProjection(projectionCar, targetCompound, 8, false);
     const freshGain = current.total - freshLap;
     return {
       outLap,
@@ -1378,9 +1560,10 @@
     };
   }
 
-  function calculateDecisionMath(player, projection, pitLap, targetCompound) {
-    const currentLapTime = calculateLapBreakdown(player).total;
-    const freshLapTime = estimateLapTimeForProjection(player, targetCompound, 8, false);
+  function calculateDecisionMath(player, projection, pitLap, targetCompound, paceMode = null) {
+    const projectionCar = { ...player, paceMode: paceMode || player.paceMode };
+    const currentLapTime = calculateLapBreakdown(player, paceMode).total;
+    const freshLapTime = estimateLapTimeForProjection(projectionCar, targetCompound, 8, false);
     const lapGain = Math.max(0.05, currentLapTime - freshLapTime);
     const trafficCost = projection.trafficRisk ? raceConfig.trafficPenalty * 2 : 0;
     const totalStopCost = currentPitLoss() + trafficCost;
@@ -1403,6 +1586,231 @@
     };
   }
 
+  function buildStrategyContext(player, projection, pitLap, targetCompound, paceMode = null, decisionMath = null) {
+    const localResponses = state.cars
+      .filter((car) => !car.isPlayer && Math.abs(car.position - player.position) <= 3)
+      .map((car) => evaluateRivalPitPressure(car, player, pitLap));
+    const likelyPitCount = localResponses.filter((entry) => entry.probability >= 0.58).length;
+    const coverRiskScore = localResponses
+      .filter((entry) => entry.relative === "ahead")
+      .reduce((sum, entry) => sum + entry.probability, 0);
+    const undercutThreatScore = localResponses
+      .filter((entry) => entry.relative === "behind")
+      .reduce((sum, entry) => sum + entry.probability, 0);
+    const totalAhead = Math.max(1, localResponses.filter((entry) => entry.relative === "ahead").length);
+    const totalBehind = Math.max(1, localResponses.filter((entry) => entry.relative === "behind").length);
+    const coverRisk = coverRiskScore / totalAhead;
+    const undercutThreat = undercutThreatScore / totalBehind;
+    const coverRiskLabel = probabilityLabel(coverRisk);
+    const undercutThreatLabel = probabilityLabel(undercutThreat);
+    const topThreat = localResponses
+      .slice()
+      .sort((left, right) => right.probability - left.probability)[0] || null;
+    return {
+      localResponses,
+      likelyPitCount,
+      coverRisk,
+      coverRiskLabel,
+      undercutThreat,
+      undercutThreatLabel,
+      topThreat,
+      decisionMath,
+      projection,
+      pitLap,
+      targetCompound,
+      paceMode
+    };
+  }
+
+  function evaluateRivalPitPressure(car, player, pitLap) {
+    const plan = opponentStrategies[car.id];
+    const nextPitLap = getNextPitLapForCar(car, plan);
+    const tyre = tyreCompounds[car.tyre];
+    const lapsToWindow = nextPitLap === null ? 99 : nextPitLap - pitLap;
+    const cliffMargin = tyre.cliffThreshold - car.tyreWear;
+    let probability = 0.08;
+
+    if (state.safetyCar.active && plan && plan.respondsToSafetyCar && car.completedStops.length === 0 && pitLap >= plan.firstPitLap - 2) {
+      probability += 0.38;
+    }
+
+    if (lapsToWindow <= 0) {
+      probability += 0.46;
+    } else if (lapsToWindow === 1) {
+      probability += 0.32;
+    } else if (lapsToWindow === 2) {
+      probability += 0.2;
+    } else if (lapsToWindow === 3) {
+      probability += 0.1;
+    }
+
+    if (cliffMargin <= 0) {
+      probability += 0.2;
+    } else if (cliffMargin <= 5) {
+      probability += 0.14;
+    } else if (cliffMargin <= 10) {
+      probability += 0.08;
+    }
+
+    if (car.tyre === "soft" && car.tyreWear >= 60) {
+      probability += 0.14;
+    } else if (car.tyre === "medium" && car.tyreWear >= 56) {
+      probability += 0.08;
+    }
+
+    if (Math.abs(car.position - player.position) <= 1) {
+      probability += 0.06;
+    }
+
+    probability = clamp(probability, 0.05, 0.96);
+    const relative = car.position < player.position ? "ahead" : "behind";
+    const lapWindowText = nextPitLap === null ? "No stop modelled" : lapsToWindow <= 0 ? `Window open now` : `Window in ${lapsToWindow} lap${lapsToWindow === 1 ? "" : "s"}`;
+    let impact;
+    if (relative === "ahead") {
+      impact = probability >= 0.58 ? "Likely to cover if you pit" : "May stay out and force overcut maths";
+    } else {
+      impact = probability >= 0.58 ? "Undercut threat if you stay out" : "Lower short-term stop threat";
+    }
+    return {
+      id: car.id,
+      driver: car.driver,
+      position: car.position,
+      relative,
+      tyre: car.tyre,
+      wear: car.tyreWear,
+      probability,
+      probabilityText: `${Math.round(probability * 100)}%`,
+      probabilityLabel: probabilityLabel(probability),
+      nextPitLap,
+      lapWindowText,
+      impact
+    };
+  }
+
+  function getNextPitLapForCar(car, plan) {
+    if (!plan) {
+      return null;
+    }
+    if (car.completedStops.length === 0) {
+      return plan.firstPitLap;
+    }
+    if (car.completedStops.length === 1 && plan.secondPitLap) {
+      return plan.secondPitLap;
+    }
+    return null;
+  }
+
+  function probabilityLabel(value) {
+    if (value >= 0.72) {
+      return "High";
+    }
+    if (value >= 0.46) {
+      return "Medium";
+    }
+    return "Low";
+  }
+
+  function buildStrategyRecommendation(player, projection, decisionMath, strategyContext) {
+    const stopEdge = decisionMath.netEstimate;
+    const cliffUrgency = decisionMath.lapsToCliff <= 2;
+    const heavyUndercutThreat = strategyContext.undercutThreat >= 0.58;
+    const heavyCoverRisk = strategyContext.coverRisk >= 0.58;
+
+    if ((stopEdge > 2.5 && !projection.trafficRisk) || cliffUrgency || (stopEdge > 0 && heavyUndercutThreat && !heavyCoverRisk)) {
+      return {
+        headline: "Pit now",
+        confidence: cliffUrgency || stopEdge > 5 ? "High" : "Medium",
+        toneClass: "pit",
+        summary: cliffUrgency
+          ? `Tyre cliff is close and fresh tyres are worth ${decisionMath.lapGain.toFixed(2)}s/lap. Waiting longer increases the chance of losing time quickly.`
+          : `Fresh tyres are forecast to repay the stop in ${decisionMath.breakEvenLaps.toFixed(1)} laps, and cars behind are likely to attack this window.`
+      };
+    }
+
+    if ((stopEdge < -3 && !cliffUrgency) || (projection.trafficRisk && !heavyUndercutThreat) || (heavyCoverRisk && stopEdge < 1)) {
+      return {
+        headline: "Stay out",
+        confidence: stopEdge < -6 ? "High" : "Medium",
+        toneClass: "stay",
+        summary: projection.trafficRisk
+          ? `The stop is expensive because the rejoin is likely to drop you into traffic. The current tyre gain does not clearly pay that back yet.`
+          : `The pit stop still needs ${decisionMath.breakEvenLaps.toFixed(1)} laps to break even, and the nearby field is not forcing the move right now.`
+      };
+    }
+
+    return {
+      headline: "Marginal call",
+      confidence: "Low",
+      toneClass: "marginal",
+      summary: `The tyre gain and stop loss are close. Your decision should mainly depend on whether you want to cover the ${strategyContext.likelyPitCount} nearby rival${strategyContext.likelyPitCount === 1 ? "" : "s"} near the pit window.`
+    };
+  }
+
+  function renderOptionComparisonCard(currentBreakdown, projectedBreakdown, projection, decisionMath, strategyContext) {
+    const pitNet = decisionMath.netEstimate;
+    const stayRisk = strategyContext.undercutThreat >= 0.58
+      ? "High risk of losing out to cars behind"
+      : strategyContext.undercutThreat >= 0.35
+        ? "Some undercut risk from behind"
+        : "Lower undercut pressure for now";
+    const pitRisk = strategyContext.coverRisk >= 0.58
+      ? "Cars ahead likely to react"
+      : strategyContext.coverRisk >= 0.35
+        ? "Some chance of rivals covering"
+        : "Fewer immediate cover threats";
+    return `
+      <article class="maths-card strategy-compare-card">
+        <span>Decision comparison</span>
+        <strong>${pitNet >= 0 ? "Pit maths improving" : "Pit maths still weak"}</strong>
+        <div class="strategy-compare-grid">
+          <div class="strategy-compare-column">
+            <h4 title="Staying out protects current track position, but increases the risk that worn tyres or a rival undercut cost you time later.">Stay out</h4>
+            <ul>
+              <li>Current lap pace: ${currentBreakdown.total.toFixed(2)}s</li>
+              <li>${stayRisk}</li>
+              <li>Tyre cliff in about ${decisionMath.lapsToCliff} lap${decisionMath.lapsToCliff === 1 ? "" : "s"}</li>
+            </ul>
+          </div>
+          <div class="strategy-compare-column">
+            <h4 title="Pitting now spends track position immediately in return for fresher tyres and potentially faster laps later in the stint.">Pit now</h4>
+            <ul>
+              <li>Rejoin around P${projection.projectedPosition}</li>
+              <li>${pitRisk}</li>
+              <li>${projectedBreakdown.freshGain.toFixed(2)}s/lap on fresh ${tyreCompounds[state.decision.compound].label.toLowerCase()}s</li>
+            </ul>
+          </div>
+        </div>
+      </article>
+    `;
+  }
+
+  function renderRivalPressureCard(strategyContext, decisionMath) {
+    const topThreatLine = strategyContext.topThreat
+      ? `Top signal: P${strategyContext.topThreat.position} ${strategyContext.topThreat.id} is at ${strategyContext.topThreat.probabilityText} pit likelihood.`
+      : "No nearby rivals are creating a strong pit-window signal.";
+    return `
+      <article class="maths-card rival-pressure-card">
+        <span>Cars around you</span>
+        <strong>${strategyContext.likelyPitCount} nearby rival${strategyContext.likelyPitCount === 1 ? "" : "s"} close to the pit window</strong>
+        <div class="rival-pressure-list">
+          ${strategyContext.localResponses.map((entry) => `
+            <div class="rival-pressure-row">
+              <div>
+                <strong>P${entry.position} ${escapeHtml(entry.id)}</strong>
+                <small>${escapeHtml(entry.lapWindowText)} · ${tyreCompounds[entry.tyre].label} ${entry.wear.toFixed(0)}%</small>
+              </div>
+              <div class="rival-pressure-meta">
+                <span class="prob-badge ${entry.probabilityLabel.toLowerCase()}" title="Estimated chance this car pits around your decision window, based on tyre wear, planned stop lap, compound, and safety-car conditions.">${entry.probabilityText}</span>
+                <small>${escapeHtml(entry.impact)}</small>
+              </div>
+            </div>
+          `).join("")}
+        </div>
+        <p class="decision-math-text rival-pressure-note" title="One extra second of traffic can wipe out about ${(1 / Math.max(0.05, decisionMath.lapGain)).toFixed(1)} laps of fresh-tyre gain at the current pace delta.">${topThreatLine}</p>
+      </article>
+    `;
+  }
+
   function mathsCard(label, value, lines) {
     return `
       <article class="maths-card">
@@ -1422,10 +1830,10 @@
   function buildPauseContext(kind) {
     const player = getPlayerCar();
     const projection = player
-      ? calculateProjectedPitExit(player, state.decision.compound, getScheduledPitLap(state.decision.timingOffset))
+      ? calculateProjectedPitExit(player, state.decision.compound, getScheduledPitLap(state.decision.timingOffset), state.decision.paceMode)
       : { projectedPosition: 7, trafficRisk: false };
     const decisionMath = player
-      ? calculateDecisionMath(player, projection, getScheduledPitLap(state.decision.timingOffset), state.decision.compound)
+      ? calculateDecisionMath(player, projection, getScheduledPitLap(state.decision.timingOffset), state.decision.compound, state.decision.paceMode)
       : null;
     const lapLabel = `Lap ${getDisplayedLap()}`;
     const stats = player ? [
@@ -1487,9 +1895,10 @@
       return {
         title: "Safety car pause",
         summary: `Race paused: safety car on Lap ${state.currentLap + 1}`,
-        reason: "The race is paused because the safety car has changed the maths. Pitting now is cheaper than under green-flag running, so the optimal strategy may have moved.",
+        reason: "The race is paused because the safety car has changed the maths. Pitting now is cheaper than under green-flag running, and the field will compress behind the safety car before the restart.",
         why: [
           `Normal pit loss is ${raceConfig.normalPitLoss.toFixed(1)}s, but the safety car reduces it to ${raceConfig.safetyCarPitLoss.toFixed(1)}s.`,
+          `This safety car is expected to last ${state.safetyCar.durationLaps} laps, so the pack will close up and track position becomes more volatile at the restart.`,
           `That lowers the break-even point to about ${decisionMath.breakEvenLaps.toFixed(1)} laps of fresh-tyre gain.`,
           projection.trafficRisk ? "There is still a traffic risk on exit, so the cheaper stop is not automatically correct." : "The projected exit looks relatively clear, which makes the discounted stop more attractive."
         ],
@@ -1881,18 +2290,18 @@
     `;
   }
 
-  function buildRaceTableContext(car, player, isLocalBattle) {
-    if (car.position === player.position) {
-      return `Gap to leader ${formatSeconds(car.gapToLeader)}<br><small>Your car · ${escapeHtml(car.strategyType)}</small>`;
+  function renderGapAheadCell(car) {
+    if (car.position === 1 || car.gapToCarAhead === null) {
+      return `<strong>Leader</strong>`;
     }
-    const delta = car.totalRaceTime - player.totalRaceTime;
-    if (isLocalBattle) {
-      const relative = delta < 0
-        ? `${formatSeconds(Math.abs(delta))} ahead of you`
-        : `${formatSeconds(delta)} behind you`;
-      return `${relative}<br><small>${escapeHtml(car.strategyType)} · ${escapeHtml(car.notes)}</small>`;
+    return `<strong>${formatSeconds(car.gapToCarAhead)}</strong>`;
+  }
+
+  function renderGapLeaderCell(car) {
+    if (car.position === 1) {
+      return `<strong>0.0s</strong>`;
     }
-    return `${formatSeconds(car.gapToLeader)} to leader<br><small>${escapeHtml(car.strategyType)}</small>`;
+    return `<strong>${formatSeconds(car.gapToLeader)}</strong>`;
   }
 
   function renderPlayerCommandCard(player, projection) {
@@ -1914,6 +2323,7 @@
       <div class="support-line"><strong>Status:</strong> ${escapeHtml(raceStatus)}</div>
       <div class="major-callout">P${player.position}</div>
       <div class="support-line">Ahead ${escapeHtml(formatSeconds(player.gapToCarAhead))} · Behind ${escapeHtml(formatSeconds(getGapBehind(player)))} · Exit if pit P${projection.projectedPosition}</div>
+      <div class="support-line">Pace mode: ${escapeHtml(paceProfiles[player.paceMode || "normal"].label)}</div>
       <div class="support-line">${escapeHtml(nextCall)}</div>
       <div class="risk-line">${escapeHtml(riskLine)}</div>
     `;
@@ -1965,6 +2375,7 @@
       <svg class="race-map-svg" viewBox="0 0 ${width} ${height}" role="img" aria-label="${leaderMode ? "Leader-relative" : "Player-relative"} race gaps">
         <rect x="0" y="0" width="${width}" height="${height}" fill="#ffffff" />
         <line x1="${left}" y1="${laneY}" x2="${right}" y2="${laneY}" stroke="#c7d2e1" stroke-width="2" />
+        ${state.safetyCar.active ? renderSafetyCarMarker(left, right, laneY, leaderMode) : ""}
         ${leaderMode
           ? `<text x="${left}" y="12" font-size="10" fill="#60738f">Leader</text>
              <text x="${right - 54}" y="12" font-size="10" fill="#60738f">Backmarkers</text>`
@@ -1978,6 +2389,15 @@
       <div class="race-map-hotspots">
         ${hotspots.join("")}
       </div>
+    `;
+  }
+
+  function renderSafetyCarMarker(left, right, laneY, leaderMode) {
+    const centerX = leaderMode ? left - 12 : left + 18;
+    const labelX = leaderMode ? centerX - 8 : centerX + 16;
+    return `
+      <rect x="${centerX - 10}" y="${laneY - 7}" width="20" height="14" fill="#ffcd57" stroke="#8a6a00" />
+      <text x="${labelX}" y="${laneY + 3}" font-size="9" fill="#8a6a00">${leaderMode ? "SC" : "Safety car"}</text>
     `;
   }
 
@@ -2054,7 +2474,7 @@
     if (state.safetyCar.active) {
       return state.racePaused
         ? `Race paused: safety car on Lap ${state.currentLap + 1}`
-        : `Race running under safety car on Lap ${state.currentLap + 1}`;
+        : `Race running under safety car · ${state.safetyCar.remainingLaps} laps left`;
     }
     if (!state.raceStarted) {
       return "Race paused: choose and commit a strategy";

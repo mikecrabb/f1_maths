@@ -121,7 +121,7 @@
                   <span>Gap ahead / behind</span>
                   <strong id="gapDisplay">2.6s / 2.2s</strong>
                 </article>
-                <article class="metric-card">
+                <article id="raceStatusCard" class="metric-card">
                   <span>Race status</span>
                   <strong id="raceStatusDisplay">Race paused</strong>
                 </article>
@@ -155,57 +155,85 @@
               <h2>Your Call</h2>
               <span id="decisionStatus" class="subtle-label">Choose your next call</span>
             </div>
-            <form id="decisionForm">
-              <fieldset class="action-grid">
-                <legend>Current decision</legend>
-                <label class="option-card action-tile">
-                  <input type="radio" name="decisionAction" value="stay" checked>
-                  <span>Stay out</span>
-                  <small>Protect track position</small>
-                </label>
-                <label class="option-card action-tile">
-                  <input type="radio" name="decisionAction" value="pit">
-                  <span>Pit</span>
-                  <small>Trade track position for fresher tyres</small>
-                </label>
-              </fieldset>
+            <div class="decision-briefing">
+              <div id="decisionSummaryCard" class="decision-summary-card"></div>
+              <div id="decisionInsights" class="insight-box"></div>
+            </div>
+            <form id="decisionForm" class="decision-controls">
               <div class="decision-config">
-                <div class="control-row">
-                  <label for="pitTiming">Pit timing</label>
-                  <select id="pitTiming">
-                    <option value="0">This lap</option>
-                    <option value="1">Next lap</option>
-                    <option value="2">In 2 laps</option>
-                    <option value="3">In 3 laps</option>
-                  </select>
-                </div>
                 <fieldset>
-                  <legend>Tyre compound</legend>
+                  <legend>Race pace mode</legend>
                   <div class="compound-row">
-                    <label class="compound-card soft">
-                      <input type="radio" name="compound" value="soft">
-                      <span>Soft</span>
-                      <small>Attack now</small>
+                    <label class="compound-card push-mode">
+                      <input type="radio" name="paceMode" value="push">
+                      <span>Push</span>
+                      <small>More speed, more wear</small>
                     </label>
-                    <label class="compound-card medium">
-                      <input type="radio" name="compound" value="medium" checked>
-                      <span>Medium</span>
-                      <small>Balanced</small>
+                    <label class="compound-card normal-mode">
+                      <input type="radio" name="paceMode" value="normal" checked>
+                      <span>Normal</span>
+                      <small>Balanced pace</small>
                     </label>
-                    <label class="compound-card hard">
-                      <input type="radio" name="compound" value="hard">
-                      <span>Hard</span>
-                      <small>Go long</small>
+                    <label class="compound-card conserve-mode">
+                      <input type="radio" name="paceMode" value="conserve">
+                      <span>Conserve</span>
+                      <small>Protect the tyres</small>
                     </label>
                   </div>
                 </fieldset>
+                <fieldset class="decision-mode-block">
+                  <legend>Current decision</legend>
+                  <div class="action-grid">
+                    <label class="option-card action-tile">
+                      <input type="radio" name="decisionAction" value="stay" checked>
+                      <span>Stay out</span>
+                      <small>Protect track position</small>
+                    </label>
+                    <label class="option-card action-tile">
+                      <input type="radio" name="decisionAction" value="pit">
+                      <span>Pit</span>
+                      <small>Trade track position for fresher tyres</small>
+                    </label>
+                  </div>
+                </fieldset>
+                <div id="pitConfigBlock" class="pit-config-block">
+                  <div class="control-row">
+                    <label for="pitTiming">Pit timing</label>
+                    <select id="pitTiming">
+                      <option value="0">This lap</option>
+                      <option value="1">Next lap</option>
+                      <option value="2">In 2 laps</option>
+                      <option value="3">In 3 laps</option>
+                    </select>
+                  </div>
+                  <fieldset>
+                    <legend>Tyre compound</legend>
+                    <div class="compound-row">
+                      <label class="compound-card soft">
+                        <input type="radio" name="compound" value="soft">
+                        <span>Soft</span>
+                        <small>Attack now</small>
+                      </label>
+                      <label class="compound-card medium">
+                        <input type="radio" name="compound" value="medium" checked>
+                        <span>Medium</span>
+                        <small>Balanced</small>
+                      </label>
+                      <label class="compound-card hard">
+                        <input type="radio" name="compound" value="hard">
+                        <span>Hard</span>
+                        <small>Go long</small>
+                      </label>
+                    </div>
+                  </fieldset>
+                </div>
+                <div id="decisionActionBar" class="decision-action-bar">
+                  <button id="commitButton" class="primary inline-decision-button" type="button">Confirm call</button>
+                </div>
               </div>
             </form>
-            <div id="decisionSummaryCard" class="decision-summary-card"></div>
-            <div id="decisionInsights" class="insight-box"></div>
             <div class="transport-panel">
               <button id="pauseButton" class="transport-button" type="button">Play Race</button>
-              <button id="commitButton" class="primary" type="button">Commit Strategy</button>
               <button id="restartButton" class="ghost" type="button">Restart</button>
             </div>
           </section>
@@ -229,7 +257,8 @@
                   <tr>
                     <th>Pos</th>
                     <th>Car</th>
-                    <th>Context</th>
+                    <th>Ahead</th>
+                    <th>Leader</th>
                     <th>Tyre</th>
                     <th>Wear</th>
                     <th>Pit soon</th>

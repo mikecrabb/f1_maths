@@ -54,22 +54,52 @@ window.RACE_DATA = (() => {
 
   const scenarioPresets = [
     {
-      id: "long-run-safety-car",
+      id: "easy-silverstone-static",
+      difficulty: "easy",
       name: "Silverstone Static",
-      description: "A long opening run with a guaranteed early safety car. The whole problem is whether to hold nerve and wait for the discounted stop.",
-      startLap: 5,
+      description: "A calm long-run opening where the likely winning move is to stay patient and use the early safety car discount.",
+      startLap: 8,
       playerPosition: 8,
       playerTyre: "hard",
-      playerWear: 14,
+      playerWear: 18,
       playerGapAhead: 2.3,
       playerGapBehind: 1.6,
-      safetyCarProbability: 1,
-      safetyCarEarliestOffset: 1,
-      safetyCarLatestOffset: 3,
+      safetyCarProbability: 0.65,
+      safetyCarEarliestOffset: 2,
+      safetyCarLatestOffset: 5,
       fieldTheme: "long-run"
     },
     {
-      id: "midfield-squeeze",
+      id: "easy-barcelona-buffer",
+      difficulty: "easy",
+      name: "Barcelona Buffer",
+      description: "You have breathing room on medium tyres and enough laps left to compare a clean one-stop against a simple overcut.",
+      startLap: 24,
+      playerPosition: 6,
+      playerTyre: "medium",
+      playerWear: 41,
+      playerGapAhead: 2.7,
+      playerGapBehind: 2.2,
+      safetyCarProbability: 0.1,
+      fieldTheme: "front-fight"
+    },
+    {
+      id: "easy-red-bull-rhythm",
+      difficulty: "easy",
+      name: "Red Bull Rhythm",
+      description: "A balanced race from the lower top ten where the field is spread enough for tyre life and pit loss to be the main variables.",
+      startLap: 18,
+      playerPosition: 9,
+      playerTyre: "hard",
+      playerWear: 24,
+      playerGapAhead: 3.0,
+      playerGapBehind: 2.5,
+      safetyCarProbability: 0.08,
+      fieldTheme: "long-run"
+    },
+    {
+      id: "medium-monza-drs-trap",
+      difficulty: "medium",
       name: "Monza DRS Trap",
       description: "You are pinned inside a compressed midfield train where tiny pit timing differences can flip five positions.",
       startLap: 32,
@@ -82,7 +112,8 @@ window.RACE_DATA = (() => {
       fieldTheme: "compressed"
     },
     {
-      id: "overcut-platform",
+      id: "medium-suzuka-air-pocket",
+      difficulty: "medium",
       name: "Suzuka Air Pocket",
       description: "You start near the front in clear air on durable tyres, where track position may be worth more than the early stop.",
       startLap: 38,
@@ -95,7 +126,22 @@ window.RACE_DATA = (() => {
       fieldTheme: "long-run"
     },
     {
-      id: "tyre-cliff-chase",
+      id: "medium-interlagos-offset",
+      difficulty: "medium",
+      name: "Interlagos Offset",
+      description: "Cars around you are split across compounds, so the challenge is reading which rival windows matter and which are decoys.",
+      startLap: 34,
+      playerPosition: 11,
+      playerTyre: "medium",
+      playerWear: 49,
+      playerGapAhead: 1.6,
+      playerGapBehind: 1.5,
+      safetyCarProbability: 0.22,
+      fieldTheme: "mixed"
+    },
+    {
+      id: "hard-sakhir-soft-collapse",
+      difficulty: "hard",
       name: "Sakhir Soft Collapse",
       description: "You are chasing on worn softs near the cliff. Delay too long and the lap-time loss accelerates hard.",
       startLap: 41,
@@ -108,7 +154,8 @@ window.RACE_DATA = (() => {
       fieldTheme: "soft-chaos"
     },
     {
-      id: "safety-car-gamble",
+      id: "hard-baku-roulette",
+      difficulty: "hard",
       name: "Baku Roulette",
       description: "You are buried in traffic with a volatile safety-car chance. The smartest strategy may depend on timing chaos, not pure pace.",
       startLap: 44,
@@ -121,16 +168,17 @@ window.RACE_DATA = (() => {
       fieldTheme: "mixed"
     },
     {
-      id: "podium-undercut",
-      name: "Imola Podium Window",
-      description: "You are already in podium range, where one mistimed stop can turn a trophy run into damage limitation.",
-      startLap: 45,
-      playerPosition: 3,
+      id: "extreme-spa-double-bluff",
+      difficulty: "extreme",
+      name: "Spa Double Bluff",
+      description: "The final challenge: you are near the front with enough pace to undercut, but one wrong response to the cars around you can ruin the race.",
+      startLap: 42,
+      playerPosition: 5,
       playerTyre: "medium",
-      playerWear: 58,
-      playerGapAhead: 2.4,
-      playerGapBehind: 1.8,
-      safetyCarProbability: 0.15,
+      playerWear: 64,
+      playerGapAhead: 1.7,
+      playerGapBehind: 1.2,
+      safetyCarProbability: 0.16,
       fieldTheme: "front-fight"
     }
   ];
@@ -406,6 +454,7 @@ window.RACE_DATA = (() => {
     tyreCompounds,
     scenarioPresets: scenarioPresets.map((preset) => ({
       id: preset.id,
+      difficulty: preset.difficulty,
       name: preset.name,
       description: preset.description,
       startLap: preset.startLap,
