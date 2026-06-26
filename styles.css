@@ -449,7 +449,8 @@ button:disabled {
 }
 
 .command-panel {
-  grid-column: 1 / -1;
+  grid-column: 1 / span 2;
+  grid-row: 1;
 }
 
 .decision-panel,
@@ -470,7 +471,7 @@ button:disabled {
 
 .maths-panel {
   grid-column: 3;
-  grid-row: 2 / span 2;
+  grid-row: 1 / span 3;
   display: flex;
   flex-direction: column;
   overflow: auto;
@@ -662,6 +663,20 @@ button:disabled {
   flex-shrink: 0;
 }
 
+.decision-transport-panel {
+  margin-top: 0;
+  margin-bottom: 0.55rem;
+}
+
+.decision-status-banner {
+  border: 1px solid var(--border);
+  background: #fbfcfe;
+  padding: 0.6rem 0.75rem;
+  color: #314862;
+  font-size: 0.84rem;
+  line-height: 1.3;
+}
+
 .decision-briefing {
   display: grid;
   gap: 0.8rem;
@@ -745,16 +760,44 @@ fieldset {
   gap: 0.65rem;
 }
 
-.decision-mode-block {
-  display: grid;
-  gap: 0.35rem;
-}
-
 .pit-config-block {
   display: grid;
   gap: 0.45rem;
   padding-top: 0.1rem;
   border-top: 1px solid rgba(48, 74, 114, 0.12);
+}
+
+.pit-planner-shell {
+  border: 1px solid rgba(48, 74, 114, 0.12);
+  background: #fbfcfe;
+  padding: 0.7rem 0.8rem;
+}
+
+.pit-planner-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: start;
+  gap: 0.7rem;
+}
+
+.pit-planner-title {
+  display: block;
+  font-size: 0.95rem;
+  line-height: 1.2;
+}
+
+.pit-planner-status {
+  margin-top: 0.45rem;
+  color: #314862;
+  font-size: 0.84rem;
+  line-height: 1.32;
+}
+
+.pit-planner-actions {
+  display: grid;
+  grid-template-columns: 1fr auto auto;
+  gap: 0.55rem;
+  margin-top: 0.15rem;
 }
 
 .control-row {
@@ -923,6 +966,29 @@ fieldset {
   font-size: 0.72rem;
 }
 
+.strategy-tabs {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 0.45rem;
+  margin-bottom: 0.65rem;
+}
+
+.strategy-tab-button {
+  border: 1px solid var(--border);
+  background: #fbfcfe;
+  color: #314862;
+  padding: 0.45rem 0.55rem;
+  font-size: 0.8rem;
+  font-weight: 700;
+  text-align: center;
+}
+
+.strategy-tab-button.active {
+  background: #23384f;
+  border-color: #23384f;
+  color: #ffffff;
+}
+
 .decision-summary-card .summary-label {
   display: block;
   color: var(--muted);
@@ -987,6 +1053,13 @@ fieldset {
   margin-bottom: 0.3rem;
 }
 
+.maths-card-caption {
+  margin: -0.05rem 0 0.6rem;
+  color: var(--muted);
+  font-size: 0.82rem;
+  line-height: 1.32;
+}
+
 .maths-card strong {
   display: block;
   font-size: 1.18rem;
@@ -1005,6 +1078,208 @@ fieldset {
 
 .maths-card li {
   break-inside: avoid;
+}
+
+.strategy-options-table-wrap {
+  overflow: auto;
+  margin: 0.2rem 0 0.55rem;
+}
+
+.strategy-options-table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.strategy-options-table th,
+.strategy-options-table td {
+  text-align: left;
+  padding: 0.42rem 0.36rem;
+  border-bottom: 1px solid rgba(150, 176, 214, 0.14);
+  font-size: 0.78rem;
+  vertical-align: top;
+}
+
+.strategy-options-table th {
+  color: var(--muted);
+  background: #f8fbfe;
+  position: static;
+}
+
+.strategy-options-table td strong,
+.strategy-options-table td small {
+  display: block;
+}
+
+.strategy-options-table td small {
+  color: var(--muted);
+  line-height: 1.25;
+}
+
+.strategy-options-table tr.best {
+  background: rgba(140, 214, 92, 0.12);
+}
+
+.future-order-summary {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0.55rem;
+  margin: 0.2rem 0 0.65rem;
+}
+
+.future-order-summary div {
+  border: 1px solid rgba(48, 74, 114, 0.12);
+  background: #fbfcfe;
+  padding: 0.55rem 0.6rem;
+}
+
+.future-order-summary strong,
+.future-order-summary small {
+  display: block;
+}
+
+.future-order-summary strong {
+  font-size: 0.98rem;
+}
+
+.future-order-summary small {
+  color: var(--muted);
+  font-size: 0.76rem;
+}
+
+.future-swing {
+  display: inline-flex;
+  min-width: 2rem;
+  justify-content: center;
+  font-weight: 800;
+  font-size: 0.76rem;
+}
+
+.future-swing.gain {
+  color: #1d8f7b;
+}
+
+.future-swing.loss {
+  color: #c5522b;
+}
+
+.future-swing.flat {
+  color: #60738f;
+}
+
+.future-order-notes {
+  margin-top: 0.1rem;
+}
+
+.break-even-metrics-card {
+  margin-top: 0;
+}
+
+.scenario-branches-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.7rem;
+  margin: 0.2rem 0 0.7rem;
+}
+
+.scenario-branch {
+  border: 1px solid rgba(48, 74, 114, 0.12);
+  background: #fbfcfe;
+  padding: 0.7rem 0.8rem;
+}
+
+.scenario-branch h4 {
+  margin: 0 0 0.35rem;
+  font-size: 0.92rem;
+}
+
+.scenario-branch-metric {
+  display: grid;
+  gap: 0.08rem;
+  margin-bottom: 0.45rem;
+}
+
+.scenario-branch-metric strong {
+  font-size: 1rem;
+}
+
+.scenario-branch-metric small,
+.scenario-branch p {
+  color: var(--muted);
+  font-size: 0.8rem;
+  line-height: 1.3;
+}
+
+.scenario-branch ul {
+  margin: 0 0 0.45rem;
+  padding-left: 1rem;
+  font-size: 0.8rem;
+  line-height: 1.32;
+}
+
+.scenario-branch p {
+  margin: 0;
+}
+
+.sensitivity-list {
+  display: grid;
+  gap: 0.35rem;
+  border-top: 1px solid rgba(48, 74, 114, 0.1);
+  padding-top: 0.6rem;
+}
+
+.sensitivity-list p {
+  margin: 0;
+  color: #334860;
+  font-size: 0.82rem;
+  line-height: 1.32;
+}
+
+.rival-bar-list {
+  display: grid;
+  gap: 0.5rem;
+}
+
+.rival-bar-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(110px, 1.1fr) auto;
+  gap: 0.55rem;
+  align-items: center;
+}
+
+.rival-bar-copy strong,
+.rival-bar-copy small {
+  display: block;
+}
+
+.rival-bar-copy small {
+  color: var(--muted);
+  line-height: 1.25;
+}
+
+.rival-bar-track {
+  position: relative;
+  height: 10px;
+  border: 1px solid var(--border);
+  background: #f3f6fb;
+}
+
+.rival-bar-fill {
+  position: absolute;
+  inset: 0 auto 0 0;
+  display: block;
+  height: 100%;
+}
+
+.rival-bar-fill.high {
+  background: #ff9d82;
+}
+
+.rival-bar-fill.medium {
+  background: #f4c95d;
+}
+
+.rival-bar-fill.low {
+  background: #8dd0b3;
 }
 
 .strategy-compare-grid {
@@ -1108,6 +1383,45 @@ table {
   border-collapse: collapse;
 }
 
+.unified-table table {
+  table-layout: fixed;
+}
+
+.unified-table th:nth-child(1),
+.unified-table td:nth-child(1) {
+  width: 10%;
+}
+
+.unified-table th:nth-child(2),
+.unified-table td:nth-child(2) {
+  width: 18%;
+}
+
+.unified-table th:nth-child(3),
+.unified-table td:nth-child(3) {
+  width: 16%;
+}
+
+.unified-table th:nth-child(4),
+.unified-table td:nth-child(4) {
+  width: 16%;
+}
+
+.unified-table th:nth-child(5),
+.unified-table td:nth-child(5) {
+  width: 18%;
+}
+
+.unified-table th:nth-child(6),
+.unified-table td:nth-child(6) {
+  width: 10%;
+}
+
+.unified-table th:nth-child(7),
+.unified-table td:nth-child(7) {
+  width: 12%;
+}
+
 th,
 td {
   text-align: left;
@@ -1162,6 +1476,7 @@ tr.player-row {
 .team-line {
   display: block;
   color: var(--muted);
+  white-space: nowrap;
 }
 
 .minimal-row td {
@@ -1428,6 +1743,7 @@ tr.player-row {
 @media (max-width: 920px) {
   .section-heading,
   .command-layout,
+  .pit-planner-header,
   .results-actions {
     flex-direction: column;
     align-items: stretch;
@@ -1443,7 +1759,10 @@ tr.player-row {
   .snapshot-grid,
   .decision-insight-grid,
   .decision-math-grid,
+  .strategy-tabs,
   .strategy-compare-grid,
+  .scenario-branches-grid,
+  .future-order-summary,
   .results-chart-grid,
   .action-grid,
   .compound-row,
@@ -1460,6 +1779,15 @@ tr.player-row {
   }
 
   .decision-call-strip {
+    grid-template-columns: 1fr;
+  }
+
+  .rival-bar-row {
+    grid-template-columns: 1fr;
+    align-items: start;
+  }
+
+  .pit-planner-actions {
     grid-template-columns: 1fr;
   }
 }

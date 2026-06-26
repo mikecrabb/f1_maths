@@ -121,7 +121,7 @@
                   <span>Gap ahead / behind</span>
                   <strong id="gapDisplay">2.6s / 2.2s</strong>
                 </article>
-                <article class="metric-card">
+                <article id="raceStatusCard" class="metric-card">
                   <span>Race status</span>
                   <strong id="raceStatusDisplay">Race paused</strong>
                 </article>
@@ -153,52 +153,18 @@
           <section class="panel decision-panel">
             <div class="section-heading">
               <h2>Your Call</h2>
-              <span id="decisionStatus" class="subtle-label">Choose your next call</span>
             </div>
-            <form id="decisionForm">
-              <fieldset class="action-grid">
-                <legend>Current decision</legend>
-                <label class="option-card action-tile">
-                  <input type="radio" name="decisionAction" value="stay" checked>
-                  <span>Stay out</span>
-                  <small>Protect track position</small>
-                </label>
-                <label class="option-card action-tile">
-                  <input type="radio" name="decisionAction" value="pit">
-                  <span>Pit</span>
-                  <small>Trade track position for fresher tyres</small>
-                </label>
-              </fieldset>
+            <div class="transport-panel decision-transport-panel">
+              <button id="pauseButton" class="transport-button" type="button">Start Race</button>
+              <button id="restartButton" class="ghost" type="button">Restart</button>
+            </div>
+            <div id="decisionStatus" class="decision-status-banner">Race paused for strategy.</div>
+            <div class="decision-briefing">
+              <div id="decisionSummaryCard" class="decision-summary-card"></div>
+              <div id="decisionInsights" class="insight-box"></div>
+            </div>
+            <form id="decisionForm" class="decision-controls">
               <div class="decision-config">
-                <div class="control-row">
-                  <label for="pitTiming">Pit timing</label>
-                  <select id="pitTiming">
-                    <option value="0">This lap</option>
-                    <option value="1">Next lap</option>
-                    <option value="2">In 2 laps</option>
-                    <option value="3">In 3 laps</option>
-                  </select>
-                </div>
-                <fieldset>
-                  <legend>Tyre compound</legend>
-                  <div class="compound-row">
-                    <label class="compound-card soft">
-                      <input type="radio" name="compound" value="soft">
-                      <span>Soft</span>
-                      <small>Attack now</small>
-                    </label>
-                    <label class="compound-card medium">
-                      <input type="radio" name="compound" value="medium" checked>
-                      <span>Medium</span>
-                      <small>Balanced</small>
-                    </label>
-                    <label class="compound-card hard">
-                      <input type="radio" name="compound" value="hard">
-                      <span>Hard</span>
-                      <small>Go long</small>
-                    </label>
-                  </div>
-                </fieldset>
                 <fieldset>
                   <legend>Race pace mode</legend>
                   <div class="compound-row">
@@ -219,15 +185,54 @@
                     </label>
                   </div>
                 </fieldset>
+                <section class="pit-planner-shell">
+                  <div class="pit-planner-header">
+                    <div>
+                      <span class="summary-label">Pit stop</span>
+                      <strong class="pit-planner-title">Schedule a stop only when you want one.</strong>
+                    </div>
+                    <button id="pitPlannerToggle" class="ghost" type="button">Schedule pit stop</button>
+                  </div>
+                  <div id="pitPlannerStatus" class="pit-planner-status">No stop scheduled.</div>
+                  <div id="pitConfigBlock" class="pit-config-block hidden">
+                    <div class="control-row">
+                      <label for="pitTiming">Pit timing</label>
+                      <select id="pitTiming">
+                        <option value="0">This lap</option>
+                        <option value="1">Next lap</option>
+                        <option value="2">In 2 laps</option>
+                        <option value="3">In 3 laps</option>
+                      </select>
+                    </div>
+                    <fieldset>
+                      <legend>Tyre compound</legend>
+                      <div class="compound-row">
+                        <label class="compound-card soft">
+                          <input type="radio" name="compound" value="soft">
+                          <span>Soft</span>
+                          <small>Attack now</small>
+                        </label>
+                        <label class="compound-card medium">
+                          <input type="radio" name="compound" value="medium" checked>
+                          <span>Medium</span>
+                          <small>Balanced</small>
+                        </label>
+                        <label class="compound-card hard">
+                          <input type="radio" name="compound" value="hard">
+                          <span>Hard</span>
+                          <small>Go long</small>
+                        </label>
+                      </div>
+                    </fieldset>
+                    <div class="pit-planner-actions">
+                      <button id="commitButton" class="primary inline-decision-button" type="button">Confirm pit stop</button>
+                      <button id="pitPlannerCancel" class="ghost" type="button">Cancel</button>
+                      <button id="clearPitButton" class="ghost danger" type="button">Clear scheduled pit</button>
+                    </div>
+                  </div>
+                </section>
               </div>
             </form>
-            <div id="decisionSummaryCard" class="decision-summary-card"></div>
-            <div id="decisionInsights" class="insight-box"></div>
-            <div class="transport-panel">
-              <button id="pauseButton" class="transport-button" type="button">Play Race</button>
-              <button id="commitButton" class="primary" type="button">Commit Strategy</button>
-              <button id="restartButton" class="ghost" type="button">Restart</button>
-            </div>
           </section>
 
           <section class="panel maths-panel">
@@ -249,7 +254,8 @@
                   <tr>
                     <th>Pos</th>
                     <th>Car</th>
-                    <th>Context</th>
+                    <th>Ahead</th>
+                    <th>Leader</th>
                     <th>Tyre</th>
                     <th>Wear</th>
                     <th>Pit soon</th>
